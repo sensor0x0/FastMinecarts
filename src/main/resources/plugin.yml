@@ -1,0 +1,17 @@
+# src/main/resources/plugin.yml
+name: FastMinecarts
+version: '0.1.0'
+main: org.sensor.fastMinecarts.FastMinecarts
+api-version: '1.21'
+author: Sensor
+description: Break the speed limit in minecarts.
+commands:
+  fastminecarts:
+    description: Manage fast minecarts
+    usage: /fastminecarts <subcommand> [value]
+    permission: fastminecarts.speed
+    permission-message: You do not have permission to use this command.
+permissions:
+  fastminecarts.speed:
+    description: Allows viewing and setting the minecart speed
+    default: op
