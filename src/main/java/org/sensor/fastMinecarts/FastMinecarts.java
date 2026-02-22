@@ -4,7 +4,10 @@ package org.sensor.fastMinecarts;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.data.Rail;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
@@ -40,18 +43,60 @@ public final class FastMinecarts extends JavaPlugin implements TabCompleter, Lis
             public void run() {
                 for (World world : Bukkit.getWorlds()) {
                     for (Minecart cart : world.getEntitiesByClass(Minecart.class)) {
-                        if (cart.getMaxSpeed() != maxSpeed) {
-                            cart.setMaxSpeed(maxSpeed);
+                        double currentAllowedSpeed = maxSpeed;
+
+                        if (needsClamping(cart)) {
+                            currentAllowedSpeed = 0.4D; // Vanilla max speed
                         }
 
-                        Vector v = cart.getVelocity();
-                        if (v.length() > maxSpeed) {
-                            cart.setVelocity(v.normalize().multiply(maxSpeed));
+                        if (cart.getMaxSpeed() != currentAllowedSpeed) {
+                            cart.setMaxSpeed(currentAllowedSpeed);
                         }
                     }
                 }
             }
         }.runTaskTimer(this, 1L, 1L);
+    }
+
+    private boolean needsClamping(Minecart cart) {
+        Location currentLoc = cart.getLocation();
+
+        // 1. Check current block
+        if (isSlope(currentLoc.getBlock())) {
+            return true;
+        }
+
+        // 2. Predictive lookahead based on current velocity and configured max speed
+        Vector vel = cart.getVelocity();
+        if (vel.lengthSquared() > 0.01) {
+            Vector dir = vel.clone().normalize();
+            // Look ahead enough blocks to cover the distance traveled in 1-2 ticks
+            int lookaheadSteps = (int) Math.ceil(maxSpeed) + 1;
+
+            for (int i = 1; i <= lookaheadSteps; i++) {
+                Location checkLoc = currentLoc.clone().add(dir.clone().multiply(i));
+
+                // Check flat plane
+                if (isSlope(checkLoc.getBlock())) return true;
+
+                // Check down-slope prediction (bottom of the hill)
+                if (isSlope(checkLoc.clone().subtract(0, 1, 0).getBlock())) return true;
+
+                // Check up-slope prediction (entering a steep incline)
+                if (isSlope(checkLoc.clone().add(0, 1, 0).getBlock())) return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isSlope(Block block) {
+        if (block.getBlockData() instanceof Rail rail) {
+            Rail.Shape shape = rail.getShape();
+            return shape == Rail.Shape.ASCENDING_EAST || shape == Rail.Shape.ASCENDING_WEST ||
+                    shape == Rail.Shape.ASCENDING_NORTH || shape == Rail.Shape.ASCENDING_SOUTH;
+        }
+        return false;
     }
 
     @EventHandler
